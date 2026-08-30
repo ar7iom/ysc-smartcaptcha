@@ -5,22 +5,7 @@ defined('ABSPATH') || exit;
 // 1. СЧЁТЧИК ЗАПРОСОВ
 // ============================================================
 
-/**
- * Возвращает текущий счётчик. Кэшируется внутри запроса через статику.
- * Флаг $reset_cache позволяет сбросить кэш после инкремента.
- */
-function ysc_get_counter($reset_cache = false) {
-    static $cached = null;
-
-    if ($reset_cache) {
-        $cached = null;
-        return null;
-    }
-
-    if ($cached !== null) {
-        return $cached;
-    }
-
+function ysc_get_counter() {
     $default = array(
         'count' => 0,
         'month' => date('Y-m'),
@@ -37,21 +22,13 @@ function ysc_get_counter($reset_cache = false) {
         error_log('[YSC] Счётчик сброшен: новый месяц ' . date('Y-m'));
     }
 
-    $cached = $counter;
-    return $cached;
+    return $counter;
 }
 
 function ysc_increment_counter() {
-    // Сбрасываем кэш перед инкрементом
-    ysc_get_counter(true);
-
     $counter = ysc_get_counter();
     $counter['count']++;
     update_option('ysc_request_counter', $counter, false);
-
-    // Сбрасываем кэш после записи, чтобы следующий вызов прочёл актуальные данные
-    ysc_get_counter(true);
-
     return $counter['count'];
 }
 

@@ -9,11 +9,7 @@ function ysc_maybe_send_limit_notice($current_count) {
     $limit     = YSC_MONTHLY_LIMIT;
     $month_key = date('Y-m');
 
-    // Используем >= вместо === чтобы не пропустить порог
-    // если счётчик "перепрыгнул" точное число
-    $threshold_80 = (int)($limit * 0.8);
-
-    if ($current_count >= $threshold_80 && $current_count < $limit) {
+    if ($current_count === (int)($limit * 0.8)) {
         if (!get_option('ysc_notice_80_sent_' . $month_key, false)) {
             ysc_send_limit_email(80, $current_count);
             update_option('ysc_notice_80_sent_' . $month_key, true, false);
