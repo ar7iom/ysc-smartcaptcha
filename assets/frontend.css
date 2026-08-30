@@ -1,0 +1,31 @@
+/* ============================================================
+   8. CSS — Яндекс SmartCaptcha
+   ============================================================ */
+
+/* Скрытый контейнер виджета */
+.ysc-protected [id^="ysc-container-"] {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Видимый контейнер (если вдруг нужен не-invisible режим) */
+.ysc-protected [id^="ysc-container-"].ysc-visible {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 99999;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    opacity: 1;
+    pointer-events: all;
+    background: rgba(255, 255, 255, 0.98);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
