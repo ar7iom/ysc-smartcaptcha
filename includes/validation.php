@@ -63,7 +63,9 @@ function ysc_verify_token($token) {
 }
 
 // --- 5.1 Contact Form 7 ---
-add_filter('wpcf7_validate', 'ysc_validate_cf7', 10, 2);
+if (ysc_form_enabled('cf7')) {
+    add_filter('wpcf7_validate', 'ysc_validate_cf7', 10, 2);
+}
 function ysc_validate_cf7($result, $tags) {
     $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
     if (!ysc_verify_token($token)) {
@@ -76,7 +78,9 @@ function ysc_validate_cf7($result, $tags) {
 }
 
 // --- 5.2 WooCommerce Checkout ---
-add_action('woocommerce_checkout_process', 'ysc_validate_checkout');
+if (ysc_form_enabled('woo')) {
+    add_action('woocommerce_checkout_process', 'ysc_validate_checkout');
+}
 function ysc_validate_checkout() {
     $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
     if (!ysc_verify_token($token)) {
@@ -88,7 +92,9 @@ function ysc_validate_checkout() {
 }
 
 // --- 5.3 WooCommerce Login ---
-add_filter('woocommerce_process_login_errors', 'ysc_validate_woo_login', 10, 3);
+if (ysc_form_enabled('woo')) {
+    add_filter('woocommerce_process_login_errors', 'ysc_validate_woo_login', 10, 3);
+}
 function ysc_validate_woo_login($validation_error, $username, $password) {
     $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
     if (!ysc_verify_token($token)) {
@@ -101,7 +107,9 @@ function ysc_validate_woo_login($validation_error, $username, $password) {
 }
 
 // --- 5.4 wp-login.php ---
-add_filter('authenticate', 'ysc_validate_wp_login', 30, 3);
+if (ysc_form_enabled('wp_login')) {
+    add_filter('authenticate', 'ysc_validate_wp_login', 30, 3);
+}
 function ysc_validate_wp_login($user, $username, $password) {
     if (
         empty($_POST) ||
@@ -122,7 +130,11 @@ function ysc_validate_wp_login($user, $username, $password) {
 }
 
 // --- 5.5 Формы Impreza / UpSolution ---
-add_filter('us_form_validate', 'ysc_validate_impreza_form', 10, 2);
+if (ysc_form_enabled('impreza')) {
+    add_filter('us_form_validate', 'ysc_validate_impreza_form', 10, 2);
+    add_action('wp_ajax_nopriv_us_ajax_form_submit', 'ysc_validate_us_ajax_form', 1);
+    add_action('wp_ajax_us_ajax_form_submit',        'ysc_validate_us_ajax_form', 1);
+}
 function ysc_validate_impreza_form($errors, $form_data) {
     $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
     if (!ysc_verify_token($token)) {
@@ -130,31 +142,9 @@ function ysc_validate_impreza_form($errors, $form_data) {
     }
     return $errors;
 }
-
-add_action('wp_ajax_nopriv_us_ajax_form_submit', 'ysc_validate_us_ajax_form', 1);
-add_action('wp_ajax_us_ajax_form_submit',        'ysc_validate_us_ajax_form', 1);
-
 function ysc_validate_us_ajax_form() {
     $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
     if (!ysc_verify_token($token)) {
-        wp_send_json_error(array(
-            'message' => 'Проверка капчи не пройдена. Попробуйте снова.',
-        ));
-        wp_die();
-    }
-}
-
-// --- 5.6 Универсальный перехватчик AJAX ---
-add_action('wp_ajax_nopriv_us_ajax_form_submit', 'ysc_universal_ajax_validate', 0);
-add_action('wp_ajax_us_ajax_form_submit',        'ysc_universal_ajax_validate', 0);
-
-function ysc_universal_ajax_validate() {
-    if (!isset($_POST['smart-token'])) return;
-
-    $token = sanitize_text_field(wp_unslash($_POST['smart-token']));
-
-    if (!ysc_verify_token($token)) {
-        error_log('[YSC] Заблокирован AJAX-запрос. Action: ' . sanitize_text_field(wp_unslash($_POST['action'] ?? 'unknown')));
         wp_send_json_error(array(
             'message' => 'Проверка капчи не пройдена. Попробуйте снова.',
         ));

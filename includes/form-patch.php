@@ -5,8 +5,10 @@ defined('ABSPATH') || exit;
 // 4. PHP: ДОБАВЛЕНИЕ КЛАССА К ФОРМАМ
 // ============================================================
 
+// Impreza: добавляем класс через фильтр аргументов формы
 add_filter('us_form_args', 'ysc_add_class_to_impreza_form', 10, 1);
 function ysc_add_class_to_impreza_form($args) {
+    if (!ysc_form_enabled('impreza')) return $args;
     if (ysc_is_limit_reached()) return $args;
     $args['classes'] = isset($args['classes'])
         ? $args['classes'] . ' ysc-protected'
@@ -14,16 +16,29 @@ function ysc_add_class_to_impreza_form($args) {
     return $args;
 }
 
+// Патчим формы в контенте только для включённых типов
 add_filter('the_content', 'ysc_add_class_to_forms_in_content', 99);
 add_filter('widget_text',  'ysc_add_class_to_forms_in_content', 99);
 
 function ysc_add_class_to_forms_in_content($content) {
     if (empty($content) || ysc_is_limit_reached()) return $content;
+
+    // Проверяем, есть ли вообще хоть один включённый тип
+    $forms = get_option('ysc_forms_enabled', array());
+    $any_enabled = !empty($forms['cf7'])
+        || !empty($forms['impreza'])
+        || !empty($forms['woo'])
+        || !empty($forms['wp_login']);
+
+    if (!$any_enabled) return $content;
+
     return ysc_patch_html_forms($content);
 }
 
+// AJAX-ответы Impreza
 add_filter('us_ajax_response', 'ysc_patch_ajax_response_forms', 10, 1);
 function ysc_patch_ajax_response_forms($response) {
+    if (!ysc_form_enabled('impreza')) return $response;
     if (ysc_is_limit_reached()) return $response;
     if (is_array($response) && isset($response['html'])) {
         $response['html'] = ysc_patch_html_forms($response['html']);
@@ -31,8 +46,10 @@ function ysc_patch_ajax_response_forms($response) {
     return $response;
 }
 
-add_action('wp_ajax_us_ajax_grid',        'ysc_buffer_us_ajax_output', 0);
-add_action('wp_ajax_nopriv_us_ajax_grid', 'ysc_buffer_us_ajax_output', 0);
+if (ysc_form_enabled('impreza')) {
+    add_action('wp_ajax_us_ajax_grid',        'ysc_buffer_us_ajax_output', 0);
+    add_action('wp_ajax_nopriv_us_ajax_grid', 'ysc_buffer_us_ajax_output', 0);
+}
 
 function ysc_buffer_us_ajax_output() {
     if (!ysc_is_limit_reached()) {
@@ -50,6 +67,10 @@ function ysc_patch_output_buffer($buffer) {
     return ysc_patch_html_forms($buffer);
 }
 
+/**
+ * Добавляет класс ysc-protected к тегу <form>.
+ * Используется и для контента страниц, и для AJAX-ответов.
+ */
 function ysc_patch_html_forms($html) {
     if (empty($html)) return $html;
 

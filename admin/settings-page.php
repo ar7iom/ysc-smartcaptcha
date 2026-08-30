@@ -18,18 +18,63 @@ function ysc_add_settings_page() {
 
 add_action('admin_init', 'ysc_register_settings');
 function ysc_register_settings() {
+    // Ключи сохраняем через кастомный обработчик (шифрование)
     register_setting('ysc_settings_group', 'ysc_client_key', array(
-        'sanitize_callback' => 'sanitize_text_field',
+        'sanitize_callback' => 'ysc_sanitize_client_key',
         'default'           => '',
     ));
     register_setting('ysc_settings_group', 'ysc_server_key', array(
-        'sanitize_callback' => 'sanitize_text_field',
+        'sanitize_callback' => 'ysc_sanitize_server_key',
         'default'           => '',
     ));
     register_setting('ysc_settings_group', 'ysc_monthly_limit', array(
         'sanitize_callback' => 'absint',
         'default'           => 10000,
     ));
+    register_setting('ysc_settings_group', 'ysc_forms_enabled', array(
+        'sanitize_callback' => 'ysc_sanitize_forms_enabled',
+        'default'           => array(
+            'cf7'      => 1,
+            'impreza'  => 1,
+            'woo'      => 1,
+            'wp_login' => 1,
+        ),
+    ));
+}
+
+/**
+ * Шифруем клиентский ключ перед сохранением.
+ * Если поле пустое — оставляем старое значение.
+ */
+function ysc_sanitize_client_key($value) {
+    $value = sanitize_text_field($value);
+    if (empty($value)) {
+        return get_option('ysc_client_key', '');
+    }
+    return ysc_encrypt($value);
+}
+
+/**
+ * Шифруем серверный ключ перед сохранением.
+ */
+function ysc_sanitize_server_key($value) {
+    $value = sanitize_text_field($value);
+    if (empty($value)) {
+        return get_option('ysc_server_key', '');
+    }
+    return ysc_encrypt($value);
+}
+
+/**
+ * Санитизация чекбоксов форм.
+ */
+function ysc_sanitize_forms_enabled($value) {
+    $allowed = array('cf7', 'impreza', 'woo', 'wp_login');
+    $result  = array();
+    foreach ($allowed as $key) {
+        $result[$key] = !empty($value[$key]) ? 1 : 0;
+    }
+    return $result;
 }
 
 function ysc_render_settings_page() {
@@ -42,17 +87,37 @@ function ysc_render_settings_page() {
     $percent    = $limit > 0 ? min(100, round(($count / $limit) * 100)) : 0;
     $reset_date = date('d.m.Y', strtotime('first day of next month'));
     $is_limit   = ysc_is_limit_reached();
+    $forms      = get_option('ysc_forms_enabled', array(
+        'cf7'      => 1,
+        'impreza'  => 1,
+        'woo'      => 1,
+        'wp_login' => 1,
+    ));
 
     $bar_color = $percent >= 100 ? '#dc3232'
                : ($percent >= 80  ? '#f56e28'
                : ($percent >= 50  ? '#ffb900' : '#46b450'));
+
+    // Проверяем наличие ключей
+    $has_client_key = !empty(ysc_get_client_key());
+    $has_server_key = !empty(ysc_get_server_key());
     ?>
     <div class="wrap">
         <h1>🛡️ Яндекс SmartCaptcha</h1>
 
-        <?php if (!get_option('ysc_client_key')): ?>
+        <?php if (!$has_client_key || !$has_server_key): ?>
         <div class="notice notice-warning">
-            <p><strong>Внимание:</strong> Клиентский ключ не задан. Капча не работает. Укажите ключи ниже.</p>
+            <p>
+                <strong>Внимание:</strong>
+                <?php if (!$has_client_key && !$has_server_key): ?>
+                    Клиентский и серверный ключи не заданы. Капча не работает.
+                <?php elseif (!$has_client_key): ?>
+                    Клиентский ключ не задан. Капча не будет показываться.
+                <?php else: ?>
+                    Серверный ключ не задан. Токены не будут проверяться на сервере.
+                <?php endif; ?>
+                Укажите ключи ниже.
+            </p>
         </div>
         <?php endif; ?>
 
@@ -63,7 +128,11 @@ function ysc_render_settings_page() {
                 <h3 style="margin-top:0;font-size:14px;color:#444;">Использование за <?php echo esc_html($counter['month']); ?></h3>
                 <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px;">
                     <span style="color:#555;">Запросов использовано:</span>
-                    <strong><?php echo number_format($count, 0, ',', ' '); ?> / <?php echo number_format($limit, 0, ',', ' '); ?></strong>
+                    <strong>
+                        <?php echo number_format($count, 0, ',', ' '); ?>
+                        /
+                        <?php echo number_format($limit, 0, ',', ' '); ?>
+                    </strong>
                 </div>
                 <div style="background:#e8e8e8;border-radius:4px;height:10px;overflow:hidden;margin-bottom:4px;">
                     <div style="width:<?php echo esc_attr($percent); ?>%;background:<?php echo esc_attr($bar_color); ?>;height:10px;border-radius:4px;transition:width .3s;"></div>
@@ -82,7 +151,9 @@ function ysc_render_settings_page() {
                         <?php echo $is_limit ? 'Лимит исчерпан' : 'Капча активна'; ?>
                     </strong>
                     <span style="font-size:12px;color:#555;">
-                        <?php echo $is_limit ? 'Проверка отключена до ' . esc_html($reset_date) : 'Все формы защищены'; ?>
+                        <?php echo $is_limit
+                            ? 'Проверка отключена до ' . esc_html($reset_date)
+                            : 'Все формы защищены'; ?>
                     </span>
                 </div>
             </div>
@@ -91,11 +162,15 @@ function ysc_render_settings_page() {
 
         <?php settings_errors('ysc_settings_group'); ?>
 
-        <!-- Форма настроек -->
         <form method="post" action="options.php">
             <?php settings_fields('ysc_settings_group'); ?>
 
-            <h2 style="font-size:15px;border-bottom:1px solid #eee;padding-bottom:8px;margin-bottom:16px;">Настройки</h2>
+            <!-- Ключи API -->
+            <h2 style="font-size:15px;border-bottom:1px solid #eee;padding-bottom:8px;margin-bottom:4px;">Ключи API</h2>
+            <p style="color:#666;font-size:12px;margin-top:4px;margin-bottom:16px;">
+                🔒 Ключи хранятся в базе данных в зашифрованном виде (AES-256-CBC).
+                Оставьте поле пустым, чтобы не менять текущий ключ.
+            </p>
 
             <table class="form-table" role="presentation">
                 <tr>
@@ -106,13 +181,17 @@ function ysc_render_settings_page() {
                         <input type="text"
                                id="ysc_client_key"
                                name="ysc_client_key"
-                               value="<?php echo esc_attr(get_option('ysc_client_key', '')); ?>"
+                               value=""
                                class="regular-text"
                                autocomplete="off"
-                               placeholder="ysc1_...">
+                               placeholder="<?php echo $has_client_key ? '••••••••••••••••••••' : 'ysc1_...'; ?>">
                         <p class="description">
-                            Публичный ключ из <a href="https://console.yandex.cloud/" target="_blank" rel="noopener">Яндекс Cloud</a> → SmartCaptcha.
-                            Передаётся на фронтенд.
+                            Публичный ключ из
+                            <a href="https://console.yandex.cloud/" target="_blank" rel="noopener">Яндекс Cloud</a>
+                            → SmartCaptcha. Передаётся на фронтенд.
+                            <?php if ($has_client_key): ?>
+                                <span style="color:#46b450;">✓ Ключ задан.</span>
+                            <?php endif; ?>
                         </p>
                     </td>
                 </tr>
@@ -124,11 +203,17 @@ function ysc_render_settings_page() {
                         <input type="password"
                                id="ysc_server_key"
                                name="ysc_server_key"
-                               value="<?php echo esc_attr(get_option('ysc_server_key', '')); ?>"
+                               value=""
                                class="regular-text"
                                autocomplete="new-password"
-                               placeholder="ysc2_...">
-                        <p class="description">Секретный ключ для серверной валидации. <strong>Никогда не передаётся на фронтенд.</strong></p>
+                               placeholder="<?php echo $has_server_key ? '••••••••••••••••••••' : 'ysc2_...'; ?>">
+                        <p class="description">
+                            Секретный ключ для серверной валидации.
+                            <strong>Никогда не передаётся на фронтенд.</strong>
+                            <?php if ($has_server_key): ?>
+                                <span style="color:#46b450;">✓ Ключ задан.</span>
+                            <?php endif; ?>
+                        </p>
                     </td>
                 </tr>
                 <tr>
@@ -145,8 +230,69 @@ function ysc_render_settings_page() {
                                step="1">
                         <p class="description">
                             Бесплатный тариф Яндекс — <strong>10 000</strong> запросов в месяц.
-                            При достижении лимита проверка автоматически отключается до сброса счётчика.
+                            При достижении лимита проверка автоматически отключается.
                         </p>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- Поддерживаемые типы форм -->
+            <h2 style="font-size:15px;border-bottom:1px solid #eee;padding-bottom:8px;margin:24px 0 4px;">Защищаемые типы форм</h2>
+            <p style="color:#666;font-size:12px;margin-top:4px;margin-bottom:16px;">
+                Отключите типы форм, которые не используются на сайте, чтобы не регистрировать лишние хуки.
+            </p>
+
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row">Contact Form 7</th>
+                    <td>
+                        <label>
+                            <input type="checkbox"
+                                   name="ysc_forms_enabled[cf7]"
+                                   value="1"
+                                   <?php checked(!empty($forms['cf7'])); ?>>
+                            Включить поддержку CF7
+                        </label>
+                        <p class="description">Добавляет капчу в формы <code>form.wpcf7-form</code>. Отключите, если CF7 не установлен.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Impreza / UpSolution</th>
+                    <td>
+                        <label>
+                            <input type="checkbox"
+                                   name="ysc_forms_enabled[impreza]"
+                                   value="1"
+                                   <?php checked(!empty($forms['impreza'])); ?>>
+                            Включить поддержку форм Impreza
+                        </label>
+                        <p class="description">Добавляет капчу в формы <code>w-form</code>, <code>us-form</code> и AJAX-обработку UpSolution. Отключите, если тема не Impreza.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">WooCommerce</th>
+                    <td>
+                        <label>
+                            <input type="checkbox"
+                                   name="ysc_forms_enabled[woo]"
+                                   value="1"
+                                   <?php checked(!empty($forms['woo'])); ?>>
+                            Включить поддержку WooCommerce
+                        </label>
+                        <p class="description">Добавляет капчу на оформление заказа, вход и регистрацию WooCommerce. Отключите, если WooCommerce не установлен.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">WordPress Login</th>
+                    <td>
+                        <label>
+                            <input type="checkbox"
+                                   name="ysc_forms_enabled[wp_login]"
+                                   value="1"
+                                   <?php checked(!empty($forms['wp_login'])); ?>>
+                            Включить защиту стандартной формы входа
+                        </label>
+                        <p class="description">Добавляет капчу на <code>wp-login.php</code>. Рекомендуется оставить включённым.</p>
                     </td>
                 </tr>
             </table>
@@ -154,17 +300,7 @@ function ysc_render_settings_page() {
             <?php submit_button('Сохранить настройки'); ?>
         </form>
 
-        <!-- Поддерживаемые формы -->
-        <h2 style="font-size:15px;border-bottom:1px solid #eee;padding-bottom:8px;margin:24px 0 16px;">Поддерживаемые формы</h2>
-        <ul style="margin:0;padding-left:20px;font-size:13px;line-height:2;color:#444;">
-            <li>✅ Contact Form 7</li>
-            <li>✅ Impreza / UpSolution (w-form, us-form)</li>
-            <li>✅ WooCommerce (оформление заказа, вход, регистрация)</li>
-            <li>✅ Стандартная форма входа WordPress (wp-login.php)</li>
-        </ul>
-
         <?php if (defined('WP_DEBUG') && WP_DEBUG): ?>
-        <!-- Отладка -->
         <h2 style="font-size:15px;border-bottom:1px solid #eee;padding-bottom:8px;margin:24px 0 16px;">🔧 Отладка</h2>
         <p style="font-size:12px;color:#999;margin-bottom:10px;">WP_DEBUG активен. Кнопка сброса доступна только в режиме отладки.</p>
         <?php
@@ -176,6 +312,7 @@ function ysc_render_settings_page() {
                  </a>';
         ?>
         <?php endif; ?>
+
     </div>
     <?php
 }
@@ -187,7 +324,7 @@ function ysc_handle_manual_reset() {
         !defined('WP_DEBUG') || !WP_DEBUG ||
         !current_user_can('manage_options') ||
         !isset($_GET['ysc_reset']) ||
-        !isset($_GET['page']) || $_GET['page'] !== 'ysc-smartcaptcha' ||
+        !isset($_GET['page']) || sanitize_text_field(wp_unslash($_GET['page'])) !== 'ysc-smartcaptcha' ||
         !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'] ?? '')), 'ysc_reset_counter')
     ) {
         return;

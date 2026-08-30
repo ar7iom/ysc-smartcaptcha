@@ -12,6 +12,14 @@ function ysc_enqueue_captcha_script() {
     if (ysc_is_limit_reached()) return;
     if (!YSC_CLIENT_KEY)        return;
 
+    // Подключаем CSS
+    wp_enqueue_style(
+        'ysc-smartcaptcha',
+        YSC_PLUGIN_URL . 'assets/frontend.css',
+        array(),
+        YSC_VERSION
+    );
+
     wp_enqueue_script(
         'yandex-smartcaptcha',
         'https://smartcaptcha.yandexcloud.net/captcha.js',
@@ -29,6 +37,42 @@ function ysc_enqueue_captcha_script() {
 
 function ysc_get_inline_js() {
     $client_key = esc_js(YSC_CLIENT_KEY);
+    $forms      = get_option('ysc_forms_enabled', array());
+
+    // Собираем только включённые селекторы
+    $selectors = array();
+
+    if (!empty($forms['cf7'])) {
+        $selectors[] = "'form.wpcf7-form'";
+        $selectors[] = "'.wpcf7 form'";
+    }
+
+    if (!empty($forms['impreza'])) {
+        $selectors[] = "'form.w-form'";
+        $selectors[] = "'form.us-form'";
+        $selectors[] = "'form[class*=\"us-form\"]'";
+        $selectors[] = "'form[class*=\"w-form\"]'";
+        $selectors[] = "'.w-form form'";
+        $selectors[] = "'.us-form form'";
+        $selectors[] = "'.wpb_content_element form'";
+        $selectors[] = "'.vc_column-inner form'";
+        $selectors[] = "'.us-grid form'";
+        $selectors[] = "'.reusable-block form'";
+        $selectors[] = "'[data-us-block] form'";
+        $selectors[] = "'.us-post-custom form'";
+    }
+
+    if (!empty($forms['woo'])) {
+        $selectors[] = "'form.woocommerce-checkout'";
+        $selectors[] = "'form.woocommerce-form-login'";
+        $selectors[] = "'form.woocommerce-form-register'";
+    }
+
+    if (!empty($forms['wp_login'])) {
+        $selectors[] = "'#loginform'";
+    }
+
+    $selectors_js = implode(",\n        ", $selectors);
 
     return <<<JS
 (function() {
@@ -42,31 +86,7 @@ function ysc_get_inline_js() {
     var isScanning      = false;
 
     var FORM_SELECTORS = [
-        // Contact Form 7
-        'form.wpcf7-form',
-        '.wpcf7 form',
-
-        // Impreza / UpSolution
-        'form.w-form',
-        'form.us-form',
-        'form[class*="us-form"]',
-        'form[class*="w-form"]',
-        '.w-form form',
-        '.us-form form',
-        '.wpb_content_element form',
-        '.vc_column-inner form',
-        '.us-grid form',
-        '.reusable-block form',
-        '[data-us-block] form',
-        '.us-post-custom form',
-
-        // WooCommerce
-        'form.woocommerce-checkout',
-        'form.woocommerce-form-login',
-        'form.woocommerce-form-register',
-
-        // WordPress login
-        '#loginform'
+        {$selectors_js}
     ];
 
     function markForms() {
