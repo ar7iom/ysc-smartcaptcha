@@ -1,6 +1,6 @@
 # 🛡️ Яндекс SmartCaptcha для WordPress
 
-**Версия:** 1.1.3  
+**Версия:** 1.1.4  
 **Требования:** WordPress 5.0+, PHP 7.4+, OpenSSL  
 **Лицензия:** GPL-2.0-or-later
 
@@ -92,14 +92,14 @@ SmartCaptcha выполняет невидимую проверку (fingerprint
 
 ### Способ 1 — Через админку WordPress (рекомендуется)
 
-1. Скачайте архив `ysc-smartcaptcha-1-1-3.zip`
+1. Скачайте архив `ysc-smartcaptcha-1-1-4.zip`
 2. В админке: **Плагины → Добавить новый → Загрузить плагин**
 3. Выберите архив, нажмите **«Установить сейчас»**
 4. Нажмите **«Активировать плагин»**
 
 ### Способ 2 — Через FTP / файловый менеджер
 
-1. Распакуйте архив `ysc-smartcaptcha-1-1-3.zip`
+1. Распакуйте архив `ysc-smartcaptcha-1-1-4.zip`
 2. Загрузите папку `ysc-smartcaptcha` в `/wp-content/plugins/`
 3. В админке: **Плагины → Установленные**
 4. Найдите «Яндекс SmartCaptcha», нажмите **«Активировать»**
@@ -164,8 +164,9 @@ SmartCaptcha выполняет невидимую проверку (fingerprint
 - Буферизует вывод `us_ajax_grid` для патчинга форм в динамическом контенте
 - События: `us_init`, `us_grid_loaded`, `us_popup_open`
 
-**Селекторы JS:** `form.w-form`, `form.us-form`, `.wpb_content_element form`,
-`.vc_column-inner form`, `.us-grid form`, `.reusable-block form`, `[data-us-block] form`
+**Селекторы JS:** `form.w-form`, `form.us-form`, `form.for_cform`
+
+Поиск Impreza (`form.w-form-row`, `role="search"`, `method="get"`) не защищается.
 
 ### WooCommerce
 
@@ -354,11 +355,14 @@ ysc-smartcaptcha/
 
 ## Известные ограничения
 
-**React ошибки #418 и #423** в консоли браузера — внутренние ошибки SmartCaptcha
-от Яндекса, не влияют на работу. Исправление зависит от Яндекса.
+**`[Violation] Permissions policy violation: unload is not allowed`** —
+браузер (Chrome) по умолчанию запрещает обработчик `unload` ради Back/Forward Cache.
+Это не ошибка плагина: её генерируют сторонние скрипты (часто Яндекс.Метрика
+или iframe виджета SmartCaptcha). На работу форм не влияет.
 
-**`[Violation] unload is not allowed`** — генерируется Яндекс.Метрикой,
-не плагином капчи. Браузеры ограничивают `window.onunload` для Back/Forward Cache.
+**`GET mc.yandex.ru/metrika/watch.js net::ERR_ABORTED 499`** — запрос
+Яндекс.Метрики, не капчи. Расширения приватности и Firefox Tracking Protection
+блокируют `mc.yandex.ru`. Плагин SmartCaptcha этот домен не загружает.
 
 **Яндекс.Метрика заблокирована в Firefox** — расширения приватности и встроенная
 защита Firefox блокируют `mc.yandex.ru`. Это поведение браузера пользователя.
@@ -369,6 +373,22 @@ ysc-smartcaptcha/
 ---
 
 ## Журнал изменений
+
+### 1.1.4
+- **Исправление React #418 / #423:** один общий виджет на страницу вместо
+  виджета в каждой форме; контейнер больше не скрывается через `display:none`
+  и `width:0` (из-за этого iframe SmartCaptcha гидрировался в нулевом viewport)
+- **Исправление ложных срабатываний:** селектор `form[class*="w-form"]` цеплял
+  форму поиска Impreza (`w-form-row`). Оставлены точные селекторы
+  `form.w-form`, `form.us-form`, `form.for_cform`
+- PHP-патчинг HTML больше не помечает все `<form>` подряд — только включённые
+  типы, без GET/search
+- `captcha.js` подключается как `?render=onload&onload=yscSmartCaptchaOnload`
+  (официальный advanced-метод, без авто-render по классу `.smart-captcha`)
+- Убран глобальный перехват `window.fetch`, из-за которого сканирование форм
+  запускалось во время гидрации виджета
+- MutationObserver игнорирует DOM самого SmartCaptcha
+- Синхронизирована константа `YSC_VERSION` с заголовком плагина (кэш CSS/JS)
 
 ### 1.1.3
 - Инициализация констант `YSC_CLIENT_KEY`, `YSC_SERVER_KEY`, `YSC_MONTHLY_LIMIT`

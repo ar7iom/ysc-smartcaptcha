@@ -2,30 +2,14 @@
    8. CSS — Яндекс SmartCaptcha
    ============================================================ */
 
-/* Скрытый контейнер виджета */
-.ysc-protected [id^="ysc-container-"] {
-    position: absolute;
-    width: 0;
+/*
+ * Хост невидимого виджета.
+ * Нельзя скрывать через display:none / width:0 / overflow:hidden —
+ * iframe виджета тогда гидрируется в нулевом viewport и React
+ * пишет minified errors #418 и #423.
+ * Официальный CSS SmartCaptcha: .smart-captcha_invisible { height: 0 }
+ */
+#ysc-captcha-host {
     height: 0;
-    overflow: hidden;
-    opacity: 0;
-    pointer-events: none;
-}
-
-/* Видимый контейнер (если вдруг нужен не-invisible режим) */
-.ysc-protected [id^="ysc-container-"].ysc-visible {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 99999;
-    width: auto;
-    height: auto;
     overflow: visible;
-    opacity: 1;
-    pointer-events: all;
-    background: rgba(255, 255, 255, 0.98);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
