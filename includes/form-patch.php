@@ -23,7 +23,6 @@ add_filter('widget_text',  'ysc_add_class_to_forms_in_content', 99);
 function ysc_add_class_to_forms_in_content($content) {
     if (empty($content) || ysc_is_limit_reached()) return $content;
 
-    // Проверяем, есть ли вообще хоть один включённый тип
     $forms = get_option('ysc_forms_enabled', array());
     $any_enabled = !empty($forms['cf7'])
         || !empty($forms['impreza'])
@@ -68,8 +67,56 @@ function ysc_patch_output_buffer($buffer) {
 }
 
 /**
- * Добавляет класс ysc-protected к тегу <form>.
- * Используется и для контента страниц, и для AJAX-ответов.
+ * Пропускать поисковые/GET-формы и внутренние формы виджета.
+ */
+function ysc_form_tag_is_skippable($tag) {
+    if (preg_match('/\brole\s*=\s*([\'"])search\1/i', $tag)) {
+        return true;
+    }
+    if (preg_match('/\bmethod\s*=\s*([\'"])get\1/i', $tag)) {
+        return true;
+    }
+    if (preg_match('/\bw-form-row\b/i', $tag) || preg_match('/\bw-search\b/i', $tag)) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Тег <form> относится к включённому типу защиты.
+ */
+function ysc_form_tag_matches_enabled($tag) {
+    $forms = get_option('ysc_forms_enabled', array());
+
+    if (!empty($forms['cf7']) && preg_match('/wpcf7/i', $tag)) {
+        return true;
+    }
+
+    if (!empty($forms['impreza'])) {
+        $is_impreza = preg_match('/(?<![-\w])w-form(?![-\w])/', $tag)
+            || preg_match('/(?<![-\w])us-form(?![-\w])/', $tag)
+            || preg_match('/(?<![-\w])for_cform(?![-\w])/', $tag);
+        if ($is_impreza) {
+            return true;
+        }
+    }
+
+    if (
+        !empty($forms['woo'])
+        && preg_match('/woocommerce-(checkout|form-login|form-register)/i', $tag)
+    ) {
+        return true;
+    }
+
+    if (!empty($forms['wp_login']) && preg_match('/\bid\s*=\s*([\'"])loginform\1/i', $tag)) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Добавляет класс ysc-protected только к формам нужных типов.
  */
 function ysc_patch_html_forms($html) {
     if (empty($html)) return $html;
@@ -79,15 +126,18 @@ function ysc_patch_html_forms($html) {
         function($matches) {
             $tag = $matches[1];
             if (strpos($tag, 'ysc-protected') !== false) return $tag;
+            if (ysc_form_tag_is_skippable($tag)) return $tag;
+            if (!ysc_form_tag_matches_enabled($tag)) return $tag;
 
             if (strpos($tag, 'class=') !== false) {
                 $tag = preg_replace(
                     '/class=(["\'])([^"\']*)\1/',
                     'class=$1$2 ysc-protected$1',
-                    $tag
+                    $tag,
+                    1
                 );
             } else {
-                $tag = str_replace('<form', '<form class="ysc-protected"', $tag);
+                $tag = preg_replace('/<form\b/i', '<form class="ysc-protected"', $tag, 1);
             }
             return $tag;
         },
