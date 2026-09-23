@@ -1,10 +1,10 @@
 <?php
 /**
  * Plugin Name: Яндекс SmartCaptcha
- * Plugin URI:  https://github.com/
+ * Plugin URI:  https://github.com/ar7iom/ysc-smartcaptcha
  * Description: Невидимая Яндекс SmartCaptcha для всех форм WordPress. Поддерживает CF7, Impreza, WooCommerce, wp-login.php.
  * Version:     1.1.4
- * Author:      Your Name
+ * Author:      Bienen Vibecoding (Claude)
  * License:     GPL-2.0-or-later
  * Text Domain: ysc-smartcaptcha
  */
