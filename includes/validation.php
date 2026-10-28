@@ -6,25 +6,14 @@ defined('ABSPATH') || exit;
 // ============================================================
 
 function ysc_verify_token($token) {
-    static $already_checked = null;
-    static $already_result  = null;
-
-    if ($already_checked !== null) {
-        return $already_result;
+    static $results = array();
+    if (!is_string($token) || $token === '' || strlen($token) > 16384) {
+        return ysc_is_limit_reached();
     }
-
-    if (ysc_is_limit_reached()) {
-        error_log('[YSC] Лимит ' . YSC_MONTHLY_LIMIT . ' запросов исчерпан. Проверка пропущена.');
-        $already_checked = true;
-        $already_result  = true;
-        return true;
-    }
-
-    if (empty($token)) {
-        $already_checked = true;
-        $already_result  = false;
-        return false;
-    }
+    $cache_key = hash('sha256', $token);
+    if (array_key_exists($cache_key, $results)) return $results[$cache_key];
+    if (ysc_is_limit_reached()) return true;
+    if (!YSC_SERVER_KEY) return false;
 
     $current_count = ysc_increment_counter();
     $remaining     = YSC_MONTHLY_LIMIT - $current_count;
@@ -49,16 +38,16 @@ function ysc_verify_token($token) {
 
     if (is_wp_error($response)) {
         error_log('[YSC] Ошибка запроса: ' . $response->get_error_message());
-        $already_checked = true;
-        $already_result  = false;
+        $results[$cache_key] = false;
         return false;
     }
 
+    $http_code = wp_remote_retrieve_response_code($response);
+    if ($http_code !== 200) error_log('[YSC] Validation HTTP status: ' . (int) $http_code);
     $body   = json_decode(wp_remote_retrieve_body($response), true);
-    $result = isset($body['status']) && $body['status'] === 'ok';
+    $result = wp_remote_retrieve_response_code($response) === 200 && is_array($body) && isset($body['status']) && $body['status'] === 'ok';
 
-    $already_checked = true;
-    $already_result  = $result;
+    $results[$cache_key] = $result;
     return $result;
 }
 
@@ -106,6 +95,15 @@ function ysc_validate_woo_login($validation_error, $username, $password) {
     return $validation_error;
 }
 
+if (ysc_form_enabled('woo')) {
+    add_filter('woocommerce_registration_errors', 'ysc_validate_woo_registration', 10, 3);
+}
+function ysc_validate_woo_registration($errors, $username, $email) {
+    $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
+    if (!ysc_verify_token($token)) $errors->add('captcha_failed', 'Проверка капчи не пройдена. Попробуйте снова.');
+    return $errors;
+}
+
 // --- 5.4 wp-login.php ---
 if (ysc_form_enabled('wp_login')) {
     add_filter('authenticate', 'ysc_validate_wp_login', 30, 3);
@@ -134,6 +132,8 @@ if (ysc_form_enabled('impreza')) {
     add_filter('us_form_validate', 'ysc_validate_impreza_form', 10, 2);
     add_action('wp_ajax_nopriv_us_ajax_form_submit', 'ysc_validate_us_ajax_form', 1);
     add_action('wp_ajax_us_ajax_form_submit',        'ysc_validate_us_ajax_form', 1);
+    add_action('wp_ajax_nopriv_us_ajax_cform', 'ysc_validate_us_ajax_form', 1);
+    add_action('wp_ajax_us_ajax_cform', 'ysc_validate_us_ajax_form', 1);
 }
 function ysc_validate_impreza_form($errors, $form_data) {
     $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));

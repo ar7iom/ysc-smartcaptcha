@@ -46,12 +46,26 @@ function ysc_register_settings() {
  * Шифруем клиентский ключ перед сохранением.
  * Если поле пустое — оставляем старое значение.
  */
+
+/** WordPress may sanitize twice when update_option creates a new option. */
+function ysc_encrypt_setting_once($value) {
+    static $generated = array();
+    if (isset($generated[$value])) return $value;
+    $encrypted = ysc_encrypt($value);
+    if ($encrypted === '') {
+        add_settings_error('ysc_settings_group', 'ysc_encryption_failed', 'Не удалось зашифровать ключ. Проверьте OpenSSL.');
+        return '';
+    }
+    $generated[$encrypted] = true;
+    return $encrypted;
+}
+
 function ysc_sanitize_client_key($value) {
     $value = sanitize_text_field($value);
     if (empty($value)) {
         return get_option('ysc_client_key', '');
     }
-    return ysc_encrypt($value);
+    return ysc_encrypt_setting_once($value);
 }
 
 /**
@@ -62,7 +76,7 @@ function ysc_sanitize_server_key($value) {
     if (empty($value)) {
         return get_option('ysc_server_key', '');
     }
-    return ysc_encrypt($value);
+    return ysc_encrypt_setting_once($value);
 }
 
 /**

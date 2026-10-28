@@ -1,15 +1,3 @@
-/* ============================================================
-   8. CSS — Яндекс SmartCaptcha
-   ============================================================ */
-
-/*
- * Хост невидимого виджета.
- * Нельзя скрывать через display:none / width:0 / overflow:hidden —
- * iframe виджета тогда гидрируется в нулевом viewport и React
- * пишет minified errors #418 и #423.
- * Официальный CSS SmartCaptcha: .smart-captcha_invisible { height: 0 }
- */
-#ysc-captcha-host {
-    height: 0;
-    overflow: visible;
-}
+/* The challenge is positioned by SmartCaptcha; do not hide its host or iframe. */
+.ysc-captcha-error { color: #b32d2e; margin: 12px 0; font-size: 14px; }
+.ysc-captcha-error[hidden] { display: none; }
