@@ -2,6 +2,8 @@
 
 Версия: **1.1.6**
 
+[скачать плагин](Download/ysc-smartcaptcha-1-1-6.zip)
+
 Репозиторий: https://github.com/ar7iom/ysc-smartcaptcha
 
 Плагин добавляет невидимую Yandex SmartCaptcha к поддерживаемым формам WordPress
@@ -167,15 +169,15 @@ https://yandex.cloud/ru/docs/smartcaptcha/concepts/invisible-captcha
 В репозитории находятся автономные тесты без полной установки WordPress:
 
 ```bash
-php -d extension=openssl tests/php/run.php
-node --check assets/frontend.js
-node tests/js/run.cjs
+php -d extension=openssl src/tests/php/run.php
+node --check src/assets/frontend.js
+node src/tests/js/run.cjs
 ```
 
 Для версии 1.1.6 успешно выполнены:
 
 - синтаксическая проверка всех PHP-файлов на PHP 8.3;
-- синтаксическая проверка `assets/frontend.js` на Node.js 24;
+- синтаксическая проверка `src/assets/frontend.js` на Node.js 24;
 - **13 PHP-тестов**: GCM, CBC/Base64-совместимость, настройки, входные данные,
   API, кеш токена, поведение лимита, WooCommerce, HTML и подключение скрипта;
 - **8 JavaScript-тестов**: единичный render, настройка уведомления, submitter,
