@@ -5,6 +5,23 @@ defined('ABSPATH') || exit;
 // 5. СЕРВЕРНАЯ ВАЛИДАЦИЯ
 // ============================================================
 
+function ysc_get_submitted_token() {
+    if (!isset($_POST['smart-token']) || !is_string($_POST['smart-token'])) {
+        return '';
+    }
+
+    return trim(wp_unslash($_POST['smart-token']));
+}
+
+function ysc_get_remote_ip() {
+    if (!isset($_SERVER['REMOTE_ADDR']) || !is_string($_SERVER['REMOTE_ADDR'])) {
+        return '';
+    }
+
+    $ip = trim(wp_unslash($_SERVER['REMOTE_ADDR']));
+    return filter_var($ip, FILTER_VALIDATE_IP) !== false ? $ip : '';
+}
+
 function ysc_verify_token($token) {
     static $results = array();
     if (!is_string($token) || $token === '' || strlen($token) > 16384) {
@@ -25,13 +42,13 @@ function ysc_verify_token($token) {
     ysc_maybe_send_limit_notice($current_count);
 
     $response = wp_remote_post(
-        'https://smartcaptcha.yandexcloud.net/validate',
+        'https://smartcaptcha.cloud.yandex.ru/validate',
         array(
             'timeout' => 15,
             'body'    => array(
                 'secret' => YSC_SERVER_KEY,
                 'token'  => $token,
-                'ip'     => sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'] ?? '')),
+                'ip'     => ysc_get_remote_ip(),
             ),
         )
     );
@@ -45,7 +62,7 @@ function ysc_verify_token($token) {
     $http_code = wp_remote_retrieve_response_code($response);
     if ($http_code !== 200) error_log('[YSC] Validation HTTP status: ' . (int) $http_code);
     $body   = json_decode(wp_remote_retrieve_body($response), true);
-    $result = wp_remote_retrieve_response_code($response) === 200 && is_array($body) && isset($body['status']) && $body['status'] === 'ok';
+    $result = $http_code === 200 && is_array($body) && isset($body['status']) && $body['status'] === 'ok';
 
     $results[$cache_key] = $result;
     return $result;
@@ -56,7 +73,7 @@ if (ysc_form_enabled('cf7')) {
     add_filter('wpcf7_validate', 'ysc_validate_cf7', 10, 2);
 }
 function ysc_validate_cf7($result, $tags) {
-    $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
+    $token = ysc_get_submitted_token();
     if (!ysc_verify_token($token)) {
         $result->invalidate(array(
             'type' => 'captcha',
@@ -71,7 +88,7 @@ if (ysc_form_enabled('woo')) {
     add_action('woocommerce_checkout_process', 'ysc_validate_checkout');
 }
 function ysc_validate_checkout() {
-    $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
+    $token = ysc_get_submitted_token();
     if (!ysc_verify_token($token)) {
         wc_add_notice(
             __('Проверка капчи не пройдена. Попробуйте снова.', 'woocommerce'),
@@ -85,11 +102,11 @@ if (ysc_form_enabled('woo')) {
     add_filter('woocommerce_process_login_errors', 'ysc_validate_woo_login', 10, 3);
 }
 function ysc_validate_woo_login($validation_error, $username, $password) {
-    $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
+    $token = ysc_get_submitted_token();
     if (!ysc_verify_token($token)) {
-        return new WP_Error(
+        $validation_error->add(
             'captcha_failed',
-            __('Проверка капчи не пройдена. Попробуйте снова.', 'woocommerce')
+            __('Проверка капчи не пройдена. Попробуйте снова.', 'ysc-smartcaptcha')
         );
     }
     return $validation_error;
@@ -99,7 +116,7 @@ if (ysc_form_enabled('woo')) {
     add_filter('woocommerce_registration_errors', 'ysc_validate_woo_registration', 10, 3);
 }
 function ysc_validate_woo_registration($errors, $username, $email) {
-    $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
+    $token = ysc_get_submitted_token();
     if (!ysc_verify_token($token)) $errors->add('captcha_failed', 'Проверка капчи не пройдена. Попробуйте снова.');
     return $errors;
 }
@@ -117,7 +134,7 @@ function ysc_validate_wp_login($user, $username, $password) {
         return $user;
     }
 
-    $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
+    $token = ysc_get_submitted_token();
     if (!ysc_verify_token($token)) {
         return new WP_Error(
             'captcha_failed',
@@ -136,14 +153,14 @@ if (ysc_form_enabled('impreza')) {
     add_action('wp_ajax_us_ajax_cform', 'ysc_validate_us_ajax_form', 1);
 }
 function ysc_validate_impreza_form($errors, $form_data) {
-    $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
+    $token = ysc_get_submitted_token();
     if (!ysc_verify_token($token)) {
         $errors[] = 'Проверка капчи не пройдена. Попробуйте снова.';
     }
     return $errors;
 }
 function ysc_validate_us_ajax_form() {
-    $token = sanitize_text_field(wp_unslash($_POST['smart-token'] ?? ''));
+    $token = ysc_get_submitted_token();
     if (!ysc_verify_token($token)) {
         wp_send_json_error(array(
             'message' => 'Проверка капчи не пройдена. Попробуйте снова.',

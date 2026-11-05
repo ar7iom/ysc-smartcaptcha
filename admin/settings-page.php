@@ -31,6 +31,10 @@ function ysc_register_settings() {
         'sanitize_callback' => 'absint',
         'default'           => 10000,
     ));
+    register_setting('ysc_settings_group', 'ysc_hide_shield', array(
+        'sanitize_callback' => 'ysc_sanitize_checkbox',
+        'default'           => 0,
+    ));
     register_setting('ysc_settings_group', 'ysc_forms_enabled', array(
         'sanitize_callback' => 'ysc_sanitize_forms_enabled',
         'default'           => array(
@@ -42,6 +46,10 @@ function ysc_register_settings() {
     ));
 }
 
+function ysc_sanitize_checkbox($value) {
+    return !empty($value) && $value !== '0' ? 1 : 0;
+}
+
 /**
  * Шифруем клиентский ключ перед сохранением.
  * Если поле пустое — оставляем старое значение.
@@ -50,33 +58,42 @@ function ysc_register_settings() {
 /** WordPress may sanitize twice when update_option creates a new option. */
 function ysc_encrypt_setting_once($value) {
     static $generated = array();
-    if (isset($generated[$value])) return $value;
+    $cache_key = hash('sha256', $value);
+
+    if (isset($generated[$cache_key])) return $generated[$cache_key];
+    if (strpos($value, 'ysc2:') === 0 && ysc_decrypt($value) !== '') return $value;
+
     $encrypted = ysc_encrypt($value);
     if ($encrypted === '') {
-        add_settings_error('ysc_settings_group', 'ysc_encryption_failed', 'Не удалось зашифровать ключ. Проверьте OpenSSL.');
+        add_settings_error('ysc_settings_group', 'ysc_encryption_failed', 'Не удалось зашифровать ключ. Проверьте поддержку AES-256-GCM в OpenSSL.');
         return '';
     }
-    $generated[$encrypted] = true;
+
+    $generated[$cache_key] = $encrypted;
     return $encrypted;
 }
 
 function ysc_sanitize_client_key($value) {
-    $value = sanitize_text_field($value);
-    if (empty($value)) {
+    $value = is_string($value) ? sanitize_text_field($value) : '';
+    if ($value === '') {
         return get_option('ysc_client_key', '');
     }
-    return ysc_encrypt_setting_once($value);
+
+    $encrypted = ysc_encrypt_setting_once($value);
+    return $encrypted !== '' ? $encrypted : get_option('ysc_client_key', '');
 }
 
 /**
  * Шифруем серверный ключ перед сохранением.
  */
 function ysc_sanitize_server_key($value) {
-    $value = sanitize_text_field($value);
-    if (empty($value)) {
+    $value = is_string($value) ? sanitize_text_field($value) : '';
+    if ($value === '') {
         return get_option('ysc_server_key', '');
     }
-    return ysc_encrypt_setting_once($value);
+
+    $encrypted = ysc_encrypt_setting_once($value);
+    return $encrypted !== '' ? $encrypted : get_option('ysc_server_key', '');
 }
 
 /**
@@ -84,6 +101,7 @@ function ysc_sanitize_server_key($value) {
  */
 function ysc_sanitize_forms_enabled($value) {
     $allowed = array('cf7', 'impreza', 'woo', 'wp_login');
+    $value   = is_array($value) ? $value : array();
     $result  = array();
     foreach ($allowed as $key) {
         $result[$key] = !empty($value[$key]) ? 1 : 0;
@@ -182,7 +200,7 @@ function ysc_render_settings_page() {
             <!-- Ключи API -->
             <h2 style="font-size:15px;border-bottom:1px solid #eee;padding-bottom:8px;margin-bottom:4px;">Ключи API</h2>
             <p style="color:#666;font-size:12px;margin-top:4px;margin-bottom:16px;">
-                🔒 Ключи хранятся в базе данных в зашифрованном виде (AES-256-CBC).
+                🔒 Новые ключи шифруются AES-256-GCM; старые значения AES-256-CBC остаются совместимыми.
                 Оставьте поле пустым, чтобы не менять текущий ключ.
             </p>
 
@@ -245,6 +263,24 @@ function ysc_render_settings_page() {
                         <p class="description">
                             Бесплатный тариф Яндекс — <strong>10 000</strong> запросов в месяц.
                             При достижении лимита проверка автоматически отключается.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Уведомление SmartCaptcha</th>
+                    <td>
+                        <label>
+                            <input type="checkbox"
+                                   id="ysc_hide_shield"
+                                   name="ysc_hide_shield"
+                                   value="1"
+                                   <?php checked((bool) get_option('ysc_hide_shield', 0)); ?>>
+                            Скрыть стандартное уведомление об обработке данных
+                        </label>
+                        <p class="description">
+                            По умолчанию уведомление показывается. Если скрыть его, необходимо вручную разместить
+                            на сайте заметное официальное уведомление об обработке данных SmartCaptcha,
+                            например в футере. Скрытие без альтернативного уведомления нарушает требования сервиса.
                         </p>
                     </td>
                 </tr>

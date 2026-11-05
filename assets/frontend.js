@@ -89,7 +89,7 @@
             widgetId = window.smartCaptcha.render(host, {
                 sitekey: config.sitekey,
                 invisible: true,
-                hideShield: true,
+                hideShield: config.hideShield === true,
                 hl: config.language,
                 callback: onToken
             });

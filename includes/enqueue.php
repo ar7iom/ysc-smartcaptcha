@@ -21,7 +21,7 @@ function ysc_enqueue_captcha_script() {
     );
 
     // Explicit rendering: callback is registered before the provider script.
-    $captcha_src = 'https://smartcaptcha.yandexcloud.net/captcha.js?render=onload&onload=yscSmartCaptchaOnload';
+    $captcha_src = 'https://smartcaptcha.cloud.yandex.ru/captcha.js?render=onload&onload=yscSmartCaptchaOnload';
 
     wp_enqueue_script(
         'yandex-smartcaptcha',
@@ -84,6 +84,7 @@ function ysc_get_inline_js() {
         'sitekey' => YSC_CLIENT_KEY,
         'language' => ysc_get_widget_language(),
         'selectors' => ysc_get_form_selectors(),
+        'hideShield' => (bool) get_option('ysc_hide_shield', 0),
         'message' => 'Не удалось выполнить проверку капчи. Проверьте соединение и блокировщики, затем повторите отправку.',
         'busyMessage' => 'Дождитесь завершения проверки другой формы.',
     );

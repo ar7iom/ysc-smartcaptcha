@@ -57,9 +57,9 @@ function ysc_buffer_us_ajax_output() {
 }
 
 function ysc_patch_output_buffer($buffer) {
-    if (empty($buffer)) return $buffer;
+    if (!is_string($buffer) || $buffer === '') return $buffer;
     $data = json_decode($buffer, true);
-    if (json_last_error() === JSON_ERROR_NONE && isset($data['html'])) {
+    if (json_last_error() === JSON_ERROR_NONE && isset($data['html']) && is_string($data['html'])) {
         $data['html'] = ysc_patch_html_forms($data['html']);
         return wp_json_encode($data);
     }
@@ -119,27 +119,26 @@ function ysc_form_tag_matches_enabled($tag) {
  * Добавляет класс ysc-protected только к формам нужных типов.
  */
 function ysc_patch_html_forms($html) {
-    if (empty($html)) return $html;
+    if (!is_string($html) || $html === '') return $html;
 
     return preg_replace_callback(
         '/(<form\b[^>]*>)/i',
         function($matches) {
             $tag = $matches[1];
-            if (strpos($tag, 'ysc-protected') !== false) return $tag;
+            if (stripos($tag, 'ysc-protected') !== false) return $tag;
             if (ysc_form_tag_is_skippable($tag)) return $tag;
             if (!ysc_form_tag_matches_enabled($tag)) return $tag;
 
-            if (strpos($tag, 'class=') !== false) {
-                $tag = preg_replace(
-                    '/class=(["\'])([^"\']*)\1/',
-                    'class=$1$2 ysc-protected$1',
-                    $tag,
-                    1
-                );
-            } else {
-                $tag = preg_replace('/<form\b/i', '<form class="ysc-protected"', $tag, 1);
-            }
-            return $tag;
+            $patched = preg_replace(
+                '/\bclass\s*=\s*(["\'])([^"\']*)\1/i',
+                'class=$1$2 ysc-protected$1',
+                $tag,
+                1,
+                $replacements
+            );
+            if ($replacements > 0) return $patched;
+
+            return preg_replace('/<form\b/i', '<form class="ysc-protected"', $tag, 1);
         },
         $html
     );
